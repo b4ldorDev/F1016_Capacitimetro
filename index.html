@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capacímetro Web</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .current-value {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .measurement {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #3498db;
+            margin: 0;
+        }
+        .scale {
+            margin-top: 10px;
+            font-size: 1.2rem;
+            color: #7f8c8d;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+        .reading-history {
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table th, table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        table th {
+            background-color: #f2f2f2;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Capacímetro ESP32-CAM</h1>
+            <p>Medición de capacitancia en tiempo real</p>
+        </header>
+        
+        <div class="card">
+            <div class="current-value">
+                <h2>Lectura actual</h2>
+                <p class="measurement" id="capacitance-value">0.00 pF</p>
+                <p class="scale" id="scale-mode">Escala: 1pF - 1nF</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Gráfico en tiempo real</h2>
+            <div class="chart-container">
+                <canvas id="capacitanceChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="card reading-history">
+            <h2>Historial de lecturas</h2>
+            <table id="history-table">
+                <thead>
+                    <tr>
+                        <th>Tiempo</th>
+                        <th>Valor</th>
+                        <th>Unidad</th>
+                    </tr>
+                </thead>
+                <tbody id="history-data">
+                    <!-- Datos dinámicos aquí -->
+                </tbody>
+            </table>
+        </div>
+        
+        <footer>
+            <p>Capacímetro ESP32-CAM &copy; 2025</p>
+        </footer>
+    </div>
+
+    <script>
+        // Inicialización de gráfico
+        const ctx = document.getElementById('capacitanceChart').getContext('2d');
+        const capacitanceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(100).fill(''),
+                datasets: [{
+                    label: 'Capacitancia',
+                    data: Array(100).fill(0),
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Capacitancia'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Tiempo'
+                        }
+                    }
+                },
+                animation: {
+                    duration: 0
+                }
+            }
+        });
+
+        // Variables para almacenar datos
+        let historyData = [];
+        let chartUnit = "pF";
+        
+        // Función para actualizar el valor actual
+        function updateCurrentValue(value, unit, scale) {
+            document.getElementById('capacitance-value').textContent = `${value} ${unit}`;
+            document.getElementById('scale-mode').textContent = scale;
+        }
+        
+        // Función para actualizar el gráfico
+        function updateChart(historyData, unit) {
+            // Actualizar unidad del eje Y
+            capacitanceChart.options.scales.y.title.text = `Capacitancia (${unit})`;
+            
+            // Actualizar datos
+            capacitanceChart.data.datasets[0].data = historyData;
+            capacitanceChart.update();
+        }
+        
+        // Función para actualizar la tabla de historial
+        function updateHistoryTable(data) {
+            const tbody = document.getElementById('history-data');
+            
+            // Añadir nueva fila al principio
+            const row = document.createElement('tr');
+            
+            // Columna de tiempo
+            const timeCell = document.createElement('td');
+            const now = new Date();
+            timeCell.textContent = now.toLocaleTimeString();
+            row.appendChild(timeCell);
+            
+            // Columna de valor
+            const valueCell = document.createElement('td');
+            valueCell.textContent = data.capacitance.toFixed(2);
+            row.appendChild(valueCell);
+            
+            // Columna de unidad
+            const unitCell = document.createElement('td');
+            unitCell.textContent = data.unit;
+            row.appendChild(unitCell);
+            
+            // Añadir fila a la tabla
+            tbody.insertBefore(row, tbody.firstChild);
+            
+            // Limitar a 10 filas
+            if (tbody.children.length > 10) {
+                tbody.removeChild(tbody.lastChild);
+            }
+        }
+        
+        // Actualizar datos mediante SSE (Server-Sent Events)
+        const eventSource = new EventSource('/events');
+        
+        eventSource.addEventListener('capacitance_data', function(e) {
+            const data = JSON.parse(e.data);
+            
+            // Actualizar valor actual
+            updateCurrentValue(data.capacitance.toFixed(2), data.unit, data.scale);
+            
+            // Actualizar gráfico
+            chartUnit = data.unit;
+            updateChart(data.history, data.unit);
+            
+            // Actualizar tabla de historial
+            updateHistoryTable(data);
+        });
+        
+        // Recuperar datos iniciales
+        fetch('/data')
+            .then(response => response.json())
+            .then(data => {
+                updateCurrentValue(data.capacitance.toFixed(2), data.unit, data.scale);
+                chartUnit = data.unit;
+                updateChart(data.history, data.unit);
+            });
+    </script>
+</body>
+</html>
